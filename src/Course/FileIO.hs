@@ -85,46 +85,47 @@ printFile ::
   FilePath
   -> Chars
   -> IO ()
-printFile =
-  error "todo: Course.FileIO#printFile"
+printFile path cs = putStrLn (indent ++ path) >> putStrLn cs
+  where indent = '=' :.'=' :.'=' :.'=' :.'=' :.'=' :.'=' :.'=' :.'=' :.'=' :.'=' :.'=' :. ' ' :. Nil
 
 -- Given a list of (file name and file contents), print each.
 -- Use @printFile@.
 printFiles ::
   List (FilePath, Chars)
   -> IO ()
-printFiles =
-  error "todo: Course.FileIO#printFiles"
+printFiles = foldM_ (uncurry printFile)
+
+foldM_ :: Monad m => (a -> m ()) -> List a -> m ()
+foldM_ f = void . sequence . (f <$>)
 
 -- Given a file name, return (file name and file contents).
 -- Use @readFile@.
 getFile ::
   FilePath
   -> IO (FilePath, Chars)
-getFile =
-  error "todo: Course.FileIO#getFile"
+getFile p = (p,) <$> readFile p
 
 -- Given a list of file names, return list of (file name and file contents).
 -- Use @getFile@.
 getFiles ::
   List FilePath
   -> IO (List (FilePath, Chars))
-getFiles =
-  error "todo: Course.FileIO#getFiles"
+getFiles = sequence . (getFile <$>)
 
 -- Given a file name, read it and for each line in that file, read and print contents of each.
 -- Use @getFiles@, @lines@, and @printFiles@.
 run ::
   FilePath
   -> IO ()
-run =
-  error "todo: Course.FileIO#run"
+run p =
+    printFiles
+    =<< getFiles
+    =<< lines . snd <$> getFile p
 
 -- /Tip:/ use @getArgs@ and @run@
 main ::
   IO ()
-main =
-  error "todo: Course.FileIO#main"
+main = getArgs >>= foldM_ run
 
 ----
 
