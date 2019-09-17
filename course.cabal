@@ -47,6 +47,7 @@ library
                       ScopedTypeVariables
                       InstanceSigs
                       TupleSections
+                      LambdaCase
 
   hs-source-dirs:     src
 
