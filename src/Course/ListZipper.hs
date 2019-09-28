@@ -1,7 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 
 module Course.ListZipper where
 
@@ -307,12 +305,10 @@ moveLeftLoop ::
   ListZipper a
   -> ListZipper a
 moveLeftLoop (ListZipper (focus :. ls) a rs) = ListZipper ls focus (a :. rs)
-moveLeftLoop (ListZipper Nil a Nil) = ListZipper Nil a Nil
 moveLeftLoop (ListZipper Nil a rs) =
-    let
-      (r' :. rs') = reverse rs
-    in
-      ListZipper (rs' ++ a :. Nil) r' Nil
+      case reverse rs of
+        (r' :. rs' ) -> ListZipper (rs' ++ a :. Nil) r' Nil
+        Nil -> ListZipper Nil a Nil
 
 
 -- | Move the zipper right, or if there are no elements to the right, go to the far left.
@@ -474,8 +470,10 @@ moveLeftN' ::
   Int
   -> ListZipper a
   -> Either Int (ListZipper a)
-moveLeftN' i z | i >= 0 = ifEmpty (length $ lefts z) (toOptional $ moveLeftN i z)
-               | i < 0 = moveRightN' ((-1) * i) z
+moveLeftN' i z = 
+    if i >= 0
+      then ifEmpty (length $ lefts z) (toOptional $ moveLeftN i z)
+      else moveRightN' ((-1) * i) z
 
 ifEmpty :: b -> Optional a -> Either b a
 ifEmpty _ (Full a) = Right a
@@ -503,8 +501,10 @@ moveRightN' ::
   Int
   -> ListZipper a
   -> Either Int (ListZipper a)
-moveRightN' i z | i >= 0 = ifEmpty (length $ rights z) (toOptional $ moveRightN i z)
-                | i < 0 = moveLeftN' ((-1) * i) z
+moveRightN' i z =
+    if i >= 0
+      then ifEmpty (length $ rights z) (toOptional $ moveRightN i z)
+      else moveLeftN' ((-1) * i) z
 
 -- | Move the focus to the given absolute position in the zipper. Traverse the zipper only to the extent required.
 --
@@ -672,18 +672,12 @@ instance Applicative MaybeListZipper where
 -- [[1] >2< [3,4,5],[] >1< [2,3,4,5]] >[2,1] >3< [4,5]< [[3,2,1] >4< [5],[4,3,2,1] >5< []]
 instance Extend ListZipper where
   (<<=) f z =
-    let
-      zs = f <$>
-            (start z) :.
-            unfoldRight (\zp ->
-                          (id &&& id)
-                          <$> (toOptional $ moveRight zp)
-                        )
-                        (start z)
-      ls = take (length $ lefts z) zs
-      (a :. rs) = drop (length $ lefts z) zs
-    in
-      ListZipper (reverse ls) a rs
+      zipper (walk moveLeft)
+             (f z)
+             (walk moveRight)
+    where walk move = hlist $ unfoldRight (P.fmap (f &&& id)
+                                            . toOptional . move
+                                          ) z
 
 -- | Implement the `Extend` instance for `MaybeListZipper`.
 -- This instance will use the `Extend` instance for `ListZipper`.
