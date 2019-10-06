@@ -7,6 +7,8 @@ module Course.Anagrams where
 import Course.Core
 import Course.List
 import Course.Functor
+import Data.List (sort)
+import Prelude ((>>=), return)
 
 {-
 
@@ -32,13 +34,11 @@ anagrams ::
   Chars
   -> FilePath
   -> IO (List Chars)
-anagrams =
-  error "todo: Course.Anagrams#anagrams"
+anagrams word fp = do
+    let ref = standardize word
+    ws <- lines <$> readFile fp
+    return $ filter ((ref ==) . standardize) ws
 
--- Compare two strings for equality, ignoring case
-equalIgnoringCase ::
-  Chars
-  -> Chars
-  -> Bool
-equalIgnoringCase =
-  error "todo: Course.Anagrams#equalIgnoringCase"
+standardize :: Chars -> Chars
+standardize = (toLower <$>) . sorted
+  where sorted = listh . sort . hlist

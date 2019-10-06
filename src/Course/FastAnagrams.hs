@@ -7,6 +7,7 @@ import Course.Core
 import Course.List
 import Course.Functor
 import qualified Data.Set as S
+import Course.Anagrams (anagrams)
 
 -- Return all anagrams of the given string
 -- that appear in the given dictionary file.
@@ -17,7 +18,7 @@ fastAnagrams ::
   -> FilePath
   -> IO (List Chars)
 fastAnagrams =
-  error "todo: Course.FastAnagrams#fastAnagrams"
+    anagrams
 
 newtype NoCaseString =
   NoCaseString {
