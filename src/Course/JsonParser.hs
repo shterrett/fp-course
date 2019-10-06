@@ -14,6 +14,8 @@ import Course.Applicative
 import Course.Monad
 import Course.List
 import Course.Optional
+import Data.Ratio ((%))
+import Debug.Trace
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -112,8 +114,35 @@ toSpecialCharacter c =
 -- True
 jsonString ::
   Parser Chars
-jsonString =
-  error "todo: Course.JsonParser#jsonString"
+jsonString = singleQuoted (stringChars '\'')
+             ||| doubleQuoted (stringChars '"')
+  where
+    singleQuoted :: Parser a -> Parser a
+    singleQuoted = between (is '\'') (is '\'')
+    doubleQuoted :: Parser a -> Parser a
+    doubleQuoted = between (is '"') (is '"')
+    specialCharacter :: Char -> Parser Char
+    specialCharacter separator =
+      (is '\\' >> satisfy (/= separator))
+        >>= \c ->
+          case toSpecialCharacter c of
+              Full c' -> pure $ fromSpecialCharacter c'
+              Empty -> P $ \_ -> UnexpectedChar c
+    stringChars :: Char -> Parser (List Char)
+    stringChars separator =
+      list $
+        alpha
+        ||| satisfy isDigit
+        ||| satisfy isSpace
+        ||| specialCharacter separator
+        ||| hex
+        ||| unicode
+
+unicode ::
+  Parser Char
+unicode =
+    string "\\u" >> hex
+
 
 -- | Parse a JSON rational.
 --
@@ -149,7 +178,36 @@ jsonString =
 jsonNumber ::
   Parser Rational
 jsonNumber =
-  error "todo: Course.JsonParser#jsonNumber"
+    (negativeNumber ||| positiveNumber)
+    >>= \rational ->
+          let
+            num = case traceShowId rational of
+                    IntNum cs -> (% 1) <$> (read cs)
+                    DecimalNum cs ds ->
+                      (%)
+                      <$> (read $ cs ++ ds)
+                      <*> (Full $ foldRight (*) 1 (map (const 10) ds))
+          in
+            case num of
+              Full r -> pure r
+              Empty -> P $ \_ -> UnexpectedString $ show' rational
+    where
+      negativeNumber = (\_ n -> case n of
+                                IntNum cs -> IntNum ('-' :. cs)
+                                DecimalNum cs ds -> DecimalNum ('-' :. cs) ds
+                       ) <$> is '-' <*> positiveNumber
+      positiveNumber = decimal ||| integer
+      integer = IntNum <$> digits1
+      decimal = DecimalNum <$> (list digit) <*> (is '.' *> digits1)
+
+data NumberString =
+    IntNum Chars
+    | DecimalNum Chars Chars
+    deriving Show
+
+-- instance Show NumberString where
+--     show (IntNum cs) = show cs
+--     show (DecimalNum cs ds) = show $ cs ++ ('.' :. ds)
 
 -- | Parse a JSON true literal.
 --
@@ -163,7 +221,7 @@ jsonNumber =
 jsonTrue ::
   Parser Chars
 jsonTrue =
-  error "todo: Course.JsonParser#jsonTrue"
+    stringTok "true"
 
 -- | Parse a JSON false literal.
 --
@@ -177,7 +235,7 @@ jsonTrue =
 jsonFalse ::
   Parser Chars
 jsonFalse =
-  error "todo: Course.JsonParser#jsonFalse"
+    stringTok "false"
 
 -- | Parse a JSON null literal.
 --
@@ -191,7 +249,7 @@ jsonFalse =
 jsonNull ::
   Parser Chars
 jsonNull =
-  error "todo: Course.JsonParser#jsonNull"
+    stringTok "null"
 
 -- | Parse a JSON array.
 --
@@ -214,7 +272,7 @@ jsonNull =
 jsonArray ::
   Parser (List JsonValue)
 jsonArray =
-  error "todo: Course.JsonParser#jsonArray"
+    betweenSepbyComma '[' ']' jsonValue
 
 -- | Parse a JSON object.
 --
@@ -234,7 +292,10 @@ jsonArray =
 jsonObject ::
   Parser Assoc
 jsonObject =
-  error "todo: Course.JsonParser#jsonObject"
+    betweenSepbyComma '{' '}'
+      ((,) <$> key <*> jsonValue)
+  where
+    key = (jsonString <* spaces) <* charTok ':'
 
 -- | Parse a JSON value.
 --
@@ -250,8 +311,13 @@ jsonObject =
 -- Result >< [("key1",JsonTrue),("key2",JsonArray [JsonRational (7 % 1),JsonFalse]),("key3",JsonObject [("key4",JsonNull)])]
 jsonValue ::
   Parser JsonValue
-jsonValue =
-   error "todo: Course.JsonParser#jsonValue"
+jsonValue = JsonString <$> jsonString
+            ||| JsonRational <$> jsonNumber
+            ||| const JsonTrue <$> jsonTrue
+            ||| const JsonFalse <$> jsonFalse
+            ||| const JsonNull <$> jsonNull
+            ||| JsonArray <$> jsonArray
+            ||| JsonObject <$> jsonObject
 
 -- | Read a file into a JSON value.
 --
@@ -259,5 +325,4 @@ jsonValue =
 readJsonValue ::
   FilePath
   -> IO (ParseResult JsonValue)
-readJsonValue =
-  error "todo: Course.JsonParser#readJsonValue"
+readJsonValue = (parse jsonValue <$>) . readFile
