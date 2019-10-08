@@ -19,12 +19,14 @@ data structures that may assist you in deriving the result. It is not compulsory
 
 module Course.Cheque where
 
-import Course.Core
+import Course.Core hiding (first)
 import Course.Optional
 import Course.List
 import Course.Functor
 import Course.Applicative
 import Course.Monad
+import Data.Bifunctor (bimap, first)
+import Data.Monoid ((<>))
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -189,29 +191,17 @@ data Digit =
   | Nine
   deriving (Eq, Ord)
 
-showDigit ::
-  Digit
-  -> Chars
-showDigit Zero =
-  "zero"
-showDigit One =
-  "one"
-showDigit Two =
-  "two"
-showDigit Three =
-  "three"
-showDigit Four =
-  "four"
-showDigit Five =
-  "five"
-showDigit Six =
-  "six"
-showDigit Seven =
-  "seven"
-showDigit Eight =
-  "eight"
-showDigit Nine =
-  "nine"
+instance Show Digit where
+  show Zero = ""
+  show One = "one"
+  show Two = "two"
+  show Three = "three"
+  show Four = "four"
+  show Five = "five"
+  show Six = "six"
+  show Seven = "seven"
+  show Eight = "eight"
+  show Nine = "nine"
 
 -- A data type representing one, two or three digits, which may be useful for grouping.
 data Digit3 =
@@ -219,6 +209,23 @@ data Digit3 =
   | D2 Digit Digit
   | D3 Digit Digit Digit
   deriving Eq
+
+instance Show Digit3 where
+    show (D1 d) = show d
+    show (D2 Zero Zero) = "zero"
+    show (D2 Zero d) = show d
+    show (D2 One Zero) = "ten"
+    show (D2 One One) = "eleven"
+    show (D2 One Two) = "twelve"
+    show (D2 One Three) = "thirteen"
+    show (D2 One d) = show d <> "teen"
+    show (D2 Two d) = "twenty " <> show d
+    show (D2 Three d) = "thirty " <> show d
+    show (D2 Four d) = "fourty " <> show d
+    show (D2 Five d) = "fifty " <> show d
+    show (D2 Eight d) = "eighty " <> show d
+    show (D2 t d) = show t <> "ty " <> show d
+    show (D3 h t d) = show h <> " hundred " <> show (D2 t d)
 
 -- Possibly convert a character to a digit.
 fromChar ::
@@ -318,10 +325,46 @@ fromChar _ =
 -- >>> dollars "12345.67"
 -- "twelve thousand three hundred and forty-five dollars and sixty-seven cents"
 --
--- >>> dollars "456789123456789012345678901234567890123456789012345678901234567890.12"
--- "four hundred and fifty-six vigintillion seven hundred and eighty-nine novemdecillion one hundred and twenty-three octodecillion four hundred and fifty-six septendecillion seven hundred and eighty-nine sexdecillion twelve quindecillion three hundred and forty-five quattuordecillion six hundred and seventy-eight tredecillion nine hundred and one duodecillion two hundred and thirty-four undecillion five hundred and sixty-seven decillion eight hundred and ninety nonillion one hundred and twenty-three octillion four hundred and fifty-six septillion seven hundred and eighty-nine sextillion twelve quintillion three hundred and forty-five quadrillion six hundred and seventy-eight trillion nine hundred and one billion two hundred and thirty-four million five hundred and sixty-seven thousand eight hundred and ninety dollars and twelve cents"
 dollars ::
   Chars
   -> Chars
-dollars =
-  error "todo: Course.Cheque#dollars"
+dollars n =
+    let
+      (ds, cs) = bimap (groupDigits . onlyDigits)
+                       (exactlyTwo . onlyDigits)
+                       $ splitDecimal n
+    in
+     listh
+     $ show (first show <$> (zipDollarGroups ds))
+     <> " dollars and "
+     <> show cs
+     <> " cents"
+  where zipDollarGroups :: List Digit3 -> List (Digit3, Chars)
+        zipDollarGroups ds =
+          let
+            groupings = take (length illion - length ds) illion
+          in
+            reverse $ zip (reverse ds) groupings
+
+splitDecimal :: Chars -> (Chars, Chars)
+splitDecimal cs =
+    let
+      whole = takeWhile (/= '.') cs
+      fractional = drop (length whole + 1) cs
+    in
+      (whole, fractional)
+
+onlyDigits :: Chars -> List Digit
+onlyDigits = listOptional fromChar
+
+groupDigits :: List Digit -> List Digit3
+groupDigits = reverse . groupDigits' . reverse
+  where groupDigits' (x1 :. x2 :. x3 :. xs) = (D3 x3 x2 x1) :. groupDigits' xs
+        groupDigits' (x1 :. x2 :. Nil) = (D2 x2 x1) :. Nil
+        groupDigits' (x1 :. Nil) = (D1 x1) :. Nil
+        groupDigits' Nil = Nil
+
+exactlyTwo :: List Digit -> Digit3
+exactlyTwo (d1 :. d2 :. _) = D2 d1 d2
+exactlyTwo (d1 :. _) = D2 d1 Zero
+exactlyTwo _ = D2 Zero Zero
